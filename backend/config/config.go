@@ -6,10 +6,13 @@ type Config struct {
 	Port      string
 	ServeName string
 	MySQL     MySQLConfig
+	Log       LogConfig
+}
+type LogConfig struct {
+	Level int
 }
 type MySQLConfig struct {
-	Host string
-	Port string
+	Dsn string
 }
 
 func NewConfig() *Config {

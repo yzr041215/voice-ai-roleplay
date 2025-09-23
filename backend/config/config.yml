@@ -1,5 +1,7 @@
 ServeName: demo
-Port: 8080
+Port: :8080
 MySQL:
   Host: localhost
   Port: 3306
+Log :
+  Level: 0

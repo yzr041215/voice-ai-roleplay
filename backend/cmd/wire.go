@@ -6,6 +6,7 @@ package main
 import (
 	"demo/config"
 	V1 "demo/hander/v1"
+	"demo/pkg/log"
 	"demo/serve"
 
 	"github.com/google/wire"
@@ -24,6 +25,7 @@ func InitializeApp() *App {
 			serve.NewHttpServer,
 			config.NewConfig,
 			V1.ProviderSet,
+			log.ProviderSet,
 		),
 	)
 	return &App{}

@@ -11,10 +11,10 @@ type MySQL struct {
 	*gorm.DB
 }
 
-func NewMySQL(config *config.Config) (*MySQL, error) {
+func NewMySQL(config *config.Config) *MySQL {
 	db, err := gorm.Open(mysql.Open(config.MySQL.Dsn), &gorm.Config{})
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return &MySQL{db}, nil
+	return &MySQL{db}
 }

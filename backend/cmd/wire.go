@@ -15,7 +15,7 @@ import (
 type App struct {
 	Service *serve.HttpServer
 	config  *config.Config
-	v1      *V1.HelloHander
+	v1      *V1.Handers
 }
 
 func InitializeApp() *App {

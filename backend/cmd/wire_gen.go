@@ -8,8 +8,13 @@ package main
 
 import (
 	"demo/config"
+	"demo/hander"
 	"demo/hander/v1"
+	"demo/pkg/log"
+	"demo/pkg/store"
+	"demo/repo"
 	"demo/serve"
+	"demo/usecase"
 )
 
 // Injectors from wire.go:
@@ -18,10 +23,20 @@ func InitializeApp() *App {
 	httpServer := serve.NewHttpServer()
 	configConfig := config.NewConfig()
 	helloHander := V1.NewHelloHander(httpServer)
+	baseHandler := hander.NewBaseHandler()
+	logger := log.NewLogger(configConfig)
+	mySQL := store.NewMySQL(configConfig)
+	userRepo := repo.NewUserRepo(logger, configConfig, mySQL)
+	userUsecase := usecase.NewUserUsecase(logger, userRepo)
+	userHander := V1.NewUserHander(httpServer, baseHandler, logger, userUsecase)
+	handers := &V1.Handers{
+		Hello: helloHander,
+		User:  userHander,
+	}
 	app := &App{
 		Service: httpServer,
 		config:  configConfig,
-		v1:      helloHander,
+		v1:      handers,
 	}
 	return app
 }
@@ -31,5 +46,5 @@ func InitializeApp() *App {
 type App struct {
 	Service *serve.HttpServer
 	config  *config.Config
-	v1      *V1.HelloHander
+	v1      *V1.Handers
 }

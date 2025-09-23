@@ -17,6 +17,5 @@ __pycache__/
 *.json
 *.yaml
 *.yml
-*.md
 *.txt
 *.html

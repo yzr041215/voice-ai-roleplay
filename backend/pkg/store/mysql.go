@@ -2,6 +2,7 @@ package store
 
 import (
 	"demo/config"
+	"demo/domain"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -16,5 +17,6 @@ func NewMySQL(config *config.Config) *MySQL {
 	if err != nil {
 		panic(err)
 	}
+	db.AutoMigrate(domain.User{})
 	return &MySQL{db}
 }

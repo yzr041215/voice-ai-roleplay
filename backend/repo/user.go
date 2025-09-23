@@ -7,7 +7,9 @@ import (
 	"demo/pkg/log"
 	"demo/pkg/store"
 	"fmt"
+	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -26,6 +28,9 @@ func NewUserRepo(log *log.Logger, config *config.Config, db *store.MySQL) *UserR
 }
 
 func (r *UserRepo) CreateUser(ctx context.Context, user domain.User) error {
+	if _, err := r.GetUserByName(ctx, user.Name); err == nil {
+		return fmt.Errorf("user already exists")
+	}
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
@@ -41,9 +46,27 @@ func (r *UserRepo) GetUserByName(ctx context.Context, name string) (domain.User,
 	}
 	return user, nil
 }
-func (r *UserRepo) vertifyUserPassword(ctx context.Context, user domain.User, password string) error {
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return fmt.Errorf("failed to vertify password: %w", err)
+func (r *UserRepo) UpDataPassword(ctx context.Context, user domain.User, newPassword string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
-	return nil
+	user.Password = string(hashedPassword)
+	return r.db.WithContext(ctx).Save(&user).Error
+}
+func (r *UserRepo) VertifyUserPasswordAndGenerateToken(ctx context.Context, user domain.User) (string, error) {
+	originPassword := user.Password
+	user, err := r.GetUserByName(ctx, user.Name)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user by name: %w", err)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(originPassword)); err != nil {
+		return "", fmt.Errorf("password is not correct")
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  user.ID,
+		"exp": time.Now().Add(time.Hour * 24).Unix(),
+	})
+	tokenString, err := token.SignedString([]byte("secret"))
+	return tokenString, err
 }

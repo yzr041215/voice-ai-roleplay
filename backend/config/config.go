@@ -7,11 +7,23 @@ import (
 	"github.com/spf13/viper"
 )
 
+type TtsConfig struct {
+	BaseUrl string
+	ApiKey  string
+}
+
 type Config struct {
 	Port      string
 	ServeName string
 	MySQL     MySQLConfig
 	Log       LogConfig
+	Asr       AsrConfig
+	Tts       TtsConfig
+}
+type AsrConfig struct {
+	BaseUrl string
+	ModelId string
+	ApiKey  string
 }
 type LogConfig struct {
 	Level int
@@ -42,5 +54,10 @@ func NewConfig() *Config {
 	c.ServeName = os.Getenv("ServeName")
 	c.Port = os.Getenv("Port")
 	c.Log.Level, _ = strconv.Atoi(os.Getenv("LogLevel"))
+	c.Asr.BaseUrl = os.Getenv("BASE_URL")
+	c.Asr.ModelId = os.Getenv("ASR_MODEL_ID")
+	c.Asr.ApiKey = os.Getenv("API_KEY")
+	c.Tts.BaseUrl = os.Getenv("BASE_URL")
+	c.Tts.ApiKey = os.Getenv("API_KEY")
 	return c
 }

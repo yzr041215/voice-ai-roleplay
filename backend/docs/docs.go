@@ -15,6 +15,46 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/v1/login": {
+            "post": {
+                "description": "Login a user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Login a user",
+                "parameters": [
+                    {
+                        "description": "User data",
+                        "name": "user",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.LoginReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User logged in successfully",
+                        "schema": {
+                            "$ref": "#/definitions/domain.LoginResp"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/register": {
             "post": {
                 "description": "Register a new user",
@@ -54,6 +94,26 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/roles": {
+            "get": {
+                "description": "lists all roles",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Role"
+                ],
+                "summary": "lists all roles",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.RoleList"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -64,6 +124,47 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.LoginReq": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.LoginResp": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.RoleList": {
+            "type": "object",
+            "properties": {
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.RoleWithoutPrompt"
+                    }
+                }
+            }
+        },
+        "domain.RoleWithoutPrompt": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
                     "type": "string"
                 }
             }

@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"demo/config"
 	"demo/domain"
 	"demo/pkg/log"
 	"demo/repo"
@@ -10,12 +11,14 @@ import (
 type UserUsecase struct {
 	l        *log.Logger
 	userrepo *repo.UserRepo
+	config   *config.Config
 }
 
-func NewUserUsecase(l *log.Logger, userrepo *repo.UserRepo) *UserUsecase {
+func NewUserUsecase(l *log.Logger, userrepo *repo.UserRepo, config *config.Config) *UserUsecase {
 	return &UserUsecase{
 		l:        l.WithModule("UserUsecase"),
 		userrepo: userrepo,
+		config:   config,
 	}
 }
 

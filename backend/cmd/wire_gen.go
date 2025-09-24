@@ -27,11 +27,15 @@ func InitializeApp() *App {
 	logger := log.NewLogger(configConfig)
 	mySQL := store.NewMySQL(configConfig)
 	userRepo := repo.NewUserRepo(logger, configConfig, mySQL)
-	userUsecase := usecase.NewUserUsecase(logger, userRepo)
+	userUsecase := usecase.NewUserUsecase(logger, userRepo, configConfig)
 	userHander := V1.NewUserHander(httpServer, baseHandler, logger, userUsecase)
+	roleRepo := repo.NewRoleRepo(logger, configConfig, mySQL)
+	roleUsecase := usecase.NewRoleUsecase(roleRepo)
+	roleHander := V1.NewRoleHander(httpServer, logger, baseHandler, roleUsecase)
 	handers := &V1.Handers{
 		Hello: helloHander,
 		User:  userHander,
+		Role:  roleHander,
 	}
 	app := &App{
 		Service: httpServer,

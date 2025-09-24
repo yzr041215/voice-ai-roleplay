@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -63,10 +63,11 @@ func (r *UserRepo) VertifyUserPasswordAndGenerateToken(ctx context.Context, user
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(originPassword)); err != nil {
 		return "", fmt.Errorf("password is not correct")
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":  user.ID,
-		"exp": time.Now().Add(time.Hour * 24).Unix(),
-	})
+	claims := jwt.MapClaims{
+		"user_id": user.ID,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte("secret"))
 	return tokenString, err
 }

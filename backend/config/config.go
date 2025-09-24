@@ -19,6 +19,11 @@ type Config struct {
 	Log       LogConfig
 	Asr       AsrConfig
 	Tts       TtsConfig
+	Minio     MinioConfig
+}
+type MinioConfig struct {
+	AccessKey string
+	SecretKey string
 }
 type AsrConfig struct {
 	BaseUrl string

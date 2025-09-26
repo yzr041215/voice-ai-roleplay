@@ -6,4 +6,4 @@ import (
 	"github.com/google/wire"
 )
 
-var ProviderSet = wire.NewSet(NewUserUsecase, NewRoleUsecase, repo.ProviderSet)
+var ProviderSet = wire.NewSet(NewUserUsecase, NewRoleUsecase, repo.ProviderSet, NewFileUsecase, NewLlmUsecase,NewWsUseCase)

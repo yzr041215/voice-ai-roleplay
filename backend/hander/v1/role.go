@@ -43,3 +43,5 @@ func (h *RoleHander) ListRoles(c echo.Context) error {
 	h.NewResponseWithData(c, domain.RoleList{Roles: roles})
 	return nil
 }
+
+

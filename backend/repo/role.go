@@ -37,7 +37,13 @@ func (r *RoleRepo) GetRoleByName(ctx context.Context, name string) (domain.Role,
 	}
 	return role, nil
 }
-
+func (r *RoleRepo) GetroleById(ctx context.Context, id int) (domain.Role, error) {
+	var role domain.Role
+	if err := r.db.WithContext(ctx).First(&role, id).Error; err != nil {
+		return domain.Role{}, fmt.Errorf("failed to get role by id: %w", err)
+	}
+	return role, nil
+}
 func (r *RoleRepo) UpdateRole(ctx context.Context, role domain.Role) error {
 	return r.db.WithContext(ctx).Save(&role).Error
 }

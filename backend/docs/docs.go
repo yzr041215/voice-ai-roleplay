@@ -114,6 +114,61 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/upload": {
+            "post": {
+                "description": "Upload a file",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "File"
+                ],
+                "summary": "Upload a file",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "File to upload",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "File uploaded successfully",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/ws": {
+            "get": {
+                "description": "握手成功后，客户端与服务端全双工通信",
+                "tags": [
+                    "User"
+                ],
+                "summary": "升级为 WebSocket 实时对话",
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -164,8 +219,19 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "image_url": {
+                    "type": "string"
+                },
+                "likes": {
+                    "description": "点赞量",
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
+                },
+                "views": {
+                    "description": "浏览量",
+                    "type": "integer"
                 }
             }
         }

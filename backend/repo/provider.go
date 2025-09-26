@@ -10,4 +10,5 @@ var ProviderSet = wire.NewSet(
 	store.ProviderSet,
 	NewRoleRepo,
 	NewUserRepo,
+	NewConversationRepo,
 )

@@ -13,17 +13,20 @@ type TtsConfig struct {
 }
 
 type Config struct {
+	EndPoint  string
 	Port      string
 	ServeName string
 	MySQL     MySQLConfig
 	Log       LogConfig
 	Asr       AsrConfig
 	Tts       TtsConfig
-	Minio     MinioConfig
+	Oss       OssConfig
 }
-type MinioConfig struct {
-	AccessKey string
-	SecretKey string
+type OssConfig struct {
+	EndPoint   string
+	AccessKey  string
+	SecretKey  string
+	BucketName string
 }
 type AsrConfig struct {
 	BaseUrl string
@@ -55,6 +58,7 @@ func NewConfig() *Config {
 		Port=8080
 		LogLevel=0
 	*/
+	c.EndPoint = os.Getenv("EndPoint")
 	c.MySQL.Dsn = os.Getenv("MYSQL_DSN")
 	c.ServeName = os.Getenv("ServeName")
 	c.Port = os.Getenv("Port")
@@ -64,5 +68,9 @@ func NewConfig() *Config {
 	c.Asr.ApiKey = os.Getenv("API_KEY")
 	c.Tts.BaseUrl = os.Getenv("BASE_URL")
 	c.Tts.ApiKey = os.Getenv("API_KEY")
+	c.Oss.EndPoint = os.Getenv("MINIO_ENDPOINT")
+	c.Oss.AccessKey = os.Getenv("MINIO_ACCESS_KEY")
+	c.Oss.SecretKey = os.Getenv("MINIO_SECRET_KEY")
+	c.Oss.BucketName = os.Getenv("OSS_BUCKET")
 	return c
 }

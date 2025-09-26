@@ -1,7 +1,6 @@
 package V1
 
 import (
-	"demo/hander/midwire"
 	"demo/serve"
 	"demo/usecase"
 	"fmt"
@@ -17,10 +16,18 @@ func NewHelloHander(s *serve.HttpServer, l *usecase.LlmUsecase) *HelloHander {
 	h := &HelloHander{
 		l: l,
 	}
-	g := s.Echo.Group("/v1", midwire.Mid)
+	//加载html文件
+	s.Echo.Static("/static", "static")
+	g := s.Echo.Group("/v1")
 	g.GET("/hello", Hello)
 	g.POST("/chat", h.Chat)
+	g.GET("/index", h.index)
 	return h
+}
+
+func (h *HelloHander) index(c echo.Context) error {
+
+	return c.HTML(200, string(index))
 }
 
 func Hello(c echo.Context) error {

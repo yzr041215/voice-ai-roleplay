@@ -160,6 +160,15 @@ const docTemplate = `{
                     "User"
                 ],
                 "summary": "升级为 WebSocket 实时对话",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Role id",
+                        "name": "roleid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "101": {
                         "description": "Switching Protocols",
@@ -223,15 +232,15 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "likes": {
-                    "description": "点赞量",
+                    "description": "浏览量",
                     "type": "integer"
                 },
                 "name": {
                     "type": "string"
                 },
-                "views": {
-                    "description": "浏览量",
-                    "type": "integer"
+                "voice": {
+                    "description": "音色",
+                    "type": "string"
                 }
             }
         }

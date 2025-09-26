@@ -5,6 +5,8 @@ type Role struct {
 	Name     string `json:"name"`
 	Prompt   string `json:"prompt"`
 	ImageUrl string `json:"image_url"`
+	//音色
+	Voice string `json:"voice"` //eg：qiniu_zh_female_tmjxxy
 	//浏览量
 	Views int `json:"views"`
 	//点赞量
@@ -14,9 +16,9 @@ type RoleWithoutPrompt struct {
 	ID       int    `json:"id"`
 	Name     string `json:"name"`
 	ImageUrl string `json:"image_url"`
+	//音色
+	Voice string `json:"voice"` //eg：qiniu_zh_female_tmjxxy
 	//浏览量
-	Views int `json:"views"`
-	//点赞量
 	Likes int `json:"likes"`
 }
 type RoleList struct {

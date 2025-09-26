@@ -38,7 +38,7 @@ func (a *AsrUsecase) Asr(ctx context.Context, audioUrl string) (*domain.AsrRespo
 	requestBody := map[string]interface{}{
 		"model": "asr",
 		"audio": map[string]string{
-			"format": "mp3", // 可根据实际需求修改格式
+			"format": "wav", // 可根据实际需求修改格式
 			"url":    audioUrl,
 		},
 	}
@@ -52,7 +52,7 @@ func (a *AsrUsecase) Asr(ctx context.Context, audioUrl string) (*domain.AsrRespo
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		a.config.Asr.BaseUrl,
+		a.config.Asr.BaseUrl+"/voice/asr",
 		bytes.NewReader(body),
 	)
 	if err != nil {
@@ -73,6 +73,8 @@ func (a *AsrUsecase) Asr(ctx context.Context, audioUrl string) (*domain.AsrRespo
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
+		//body, _ := ioutil.ReadAll(resp.Body)
+		//fmt.Printf("body: %v\n", string(body))
 		return nil, fmt.Errorf("asr api returned non-200 status: %s", resp.Status)
 	}
 

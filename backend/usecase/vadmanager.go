@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/baabaaox/go-webrtcvad"
+	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -20,6 +21,7 @@ const (
 	FrameSize     = SampleRate / 1000 * FrameDuration // 320 点
 	BitDepth      = 16
 	BytesPerFrame = FrameSize * BitDepth / 8 // 640 字节
+	SilenceFrames = 50                       // 1s = 1000ms / 20ms = 50帧
 )
 
 type VadManager struct {
@@ -28,16 +30,15 @@ type VadManager struct {
 	fileUsecase *FileUsecase
 	config      *config.Config
 
-	vad       webrtcvad.VadInst
-	mu        sync.Mutex
-	currSeg   [][]byte
-	segID     int
-	vadActive bool
-
-	eg *errgroup.Group
+	vad          webrtcvad.VadInst
+	mu           sync.Mutex
+	currSeg      [][]byte
+	segID        int
+	silenceCount int
+	vadActive    bool
 }
 
-// NewVadManager 创建VadManager实例
+// NewVadManager 创建 VadManager 实例
 func NewVadManager(
 	logger *log.Logger,
 	asrUsecase *AsrUsecase,
@@ -55,15 +56,12 @@ func NewVadManager(
 		panic(err)
 	}
 
-	eg, _ := errgroup.WithContext(context.Background())
-
 	return &VadManager{
 		logger:      logger.WithModule("VadManager"),
 		asrUsecase:  asrUsecase,
 		fileUsecase: fileUsecase,
 		config:      config,
 		vad:         vad,
-		eg:          eg,
 	}
 }
 
@@ -82,8 +80,10 @@ func (v *VadManager) IsVad() bool {
 	return v.vadActive
 }
 
-// ProcessAudioStream 处理音频流（带VAD）
+// ProcessAudioStream 处理音频流（带 VAD）
 func (v *VadManager) ProcessAudioStream(ctx context.Context, audioChunks <-chan []byte) error {
+	eg, _ := errgroup.WithContext(ctx)
+
 	for chunk := range audioChunks {
 		if len(chunk) != BytesPerFrame {
 			v.logger.Warn("invalid frame size",
@@ -102,46 +102,33 @@ func (v *VadManager) ProcessAudioStream(ctx context.Context, audioChunks <-chan 
 		if active {
 			v.vadActive = true
 			v.currSeg = append(v.currSeg, chunk)
-		} else {
-			if v.vadActive && len(v.currSeg) > 0 {
-				segID := v.segID
+			v.silenceCount = 0
+		} else if v.vadActive {
+			v.silenceCount++
+			v.currSeg = append(v.currSeg, chunk)
+
+			// 达到连续静音阈值，断句
+			if v.silenceCount >= SilenceFrames {
 				chunks := make([][]byte, len(v.currSeg))
 				copy(chunks, v.currSeg)
 
-				// 提交到 errgroup
-				v.eg.Go(func() error {
-					return v.handleSegment(ctx, segID, chunks)
+				eg.Go(func() error {
+					return v.handleSegment(ctx, chunks)
 				})
 
 				v.segID++
 				v.currSeg = nil
+				v.vadActive = false
+				v.silenceCount = 0
 			}
-			v.vadActive = false
 		}
 		v.mu.Unlock()
 	}
-
-	// flush 最后一段
-	v.mu.Lock()
-	if v.vadActive && len(v.currSeg) > 0 {
-		segID := v.segID
-		chunks := make([][]byte, len(v.currSeg))
-		copy(chunks, v.currSeg)
-		v.eg.Go(func() error {
-			return v.handleSegment(ctx, segID, chunks)
-		})
-		v.segID++
-		v.currSeg = nil
-		v.vadActive = false
-	}
-	v.mu.Unlock()
-
-	// 等待所有 segment 完成
-	return v.eg.Wait()
+	return eg.Wait()
 }
 
-// handleSegment 保存一句音频并调用ASR
-func (v *VadManager) handleSegment(ctx context.Context, id int, seg [][]byte) error {
+// handleSegment 保存一句音频并调用 ASR
+func (v *VadManager) handleSegment(ctx context.Context, seg [][]byte) error {
 	var buf bytes.Buffer
 
 	// 写 WAV header
@@ -156,24 +143,28 @@ func (v *VadManager) handleSegment(ctx context.Context, id int, seg [][]byte) er
 			return err
 		}
 	}
-
+	id := uuid.New().String()
 	// 上传
-	fileName := fmt.Sprintf("seg_%d.wav", id)
+	fileName := fmt.Sprintf("seg_%s.wav", id)
 	fileKey, err := v.fileUsecase.UploadFileWithWriter(ctx, fileName, bytes.NewReader(buf.Bytes()), int64(buf.Len()))
 	if err != nil {
 		return err
 	}
 	fileUrl := fmt.Sprintf("%s/%s/%s", v.config.EndPoint, v.config.Oss.BucketName, fileKey)
-
+	v.logger.Info("VAD segment uploaded",
+		log.String("id", id),
+		log.String("url", fileUrl),
+	)
 	// 调用 ASR
 	result, err := v.asrUsecase.Asr(ctx, fileUrl)
 	if err != nil {
+		v.logger.Error("asr error", log.Error(err))
 		return err
 	}
 
 	v.logger.Info("VAD segment result",
-		log.Int("id", id),
-		log.String("text", result.Text),
+		log.String("id", id),
+		log.String("text", result.Data.Result.Text),
 	)
 	return nil
 }
@@ -181,33 +172,19 @@ func (v *VadManager) handleSegment(ctx context.Context, id int, seg [][]byte) er
 // writeWavHeader 写 WAV PCM16 单声道 16kHz 头
 func writeWavHeader(w io.Writer, dataSize int64) error {
 	var header [44]byte
-	// ChunkID "RIFF"
 	copy(header[0:], "RIFF")
-	// ChunkSize = 36 + Subchunk2Size
 	binary.LittleEndian.PutUint32(header[4:], uint32(36+dataSize))
-	// Format "WAVE"
 	copy(header[8:], "WAVE")
-	// Subchunk1ID "fmt "
 	copy(header[12:], "fmt ")
-	// Subchunk1Size 16 for PCM
 	binary.LittleEndian.PutUint32(header[16:], 16)
-	// AudioFormat 1 = PCM
 	binary.LittleEndian.PutUint16(header[20:], 1)
-	// NumChannels 1
 	binary.LittleEndian.PutUint16(header[22:], 1)
-	// SampleRate
 	binary.LittleEndian.PutUint32(header[24:], SampleRate)
-	// ByteRate = SampleRate * NumChannels * BitsPerSample/8
 	binary.LittleEndian.PutUint32(header[28:], SampleRate*1*BitDepth/8)
-	// BlockAlign = NumChannels * BitsPerSample/8
 	binary.LittleEndian.PutUint16(header[32:], 1*BitDepth/8)
-	// BitsPerSample
 	binary.LittleEndian.PutUint16(header[34:], BitDepth)
-	// Subchunk2ID "data"
 	copy(header[36:], "data")
-	// Subchunk2Size
 	binary.LittleEndian.PutUint32(header[40:], uint32(dataSize))
-
 	_, err := w.Write(header[:])
 	return err
 }

@@ -120,6 +120,7 @@ var upgrader = websocket.Upgrader{
 // @Summary 升级为 WebSocket 实时对话
 // @Description 握手成功后，客户端与服务端全双工通信
 // @Tags User
+// @Param roleid path int true "Role id"
 // @Success 101 {string} string "Switching Protocols"
 // @Router /v1/ws [get]
 func (u *UserHander) UpgradeToWS(c echo.Context) error {
@@ -129,7 +130,12 @@ func (u *UserHander) UpgradeToWS(c echo.Context) error {
 		return err
 	}
 	defer ws.Close()
-
+	//	userid, ok := c.Get("userid").(string)
+	//roleid, err := strconv.Atoi(c.Param("roleid"))
+	//if !ok || err != nil {
+	//	return errors.New("Invalid user id or role id")
+	//}
 	// 这里替换成你的「上下文聊天」逻辑即可
-	return u.wsusecase.HanderWs(ws)
+	u.wsusecase.HanderWs(ws, "1", 1)
+	return nil
 }

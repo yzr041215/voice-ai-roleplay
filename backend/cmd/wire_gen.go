@@ -34,7 +34,7 @@ func InitializeApp() *App {
 	minio := store.NewMinioStore(configConfig)
 	fileUsecase := usecase.NewFileUsecase(logger, configConfig, minio)
 	asrUsecase := usecase.NewAsrUsecase(logger, configConfig)
-	wsUseCase := usecase.NewWsUseCase(logger, configConfig, asrUsecase, llmUsecase, fileUsecase)
+	wsUseCase := usecase.NewWsUsecase(logger, configConfig, asrUsecase, llmUsecase, fileUsecase)
 	userHander := V1.NewUserHander(httpServer, baseHandler, logger, userUsecase, fileUsecase, wsUseCase)
 	roleUsecase := usecase.NewRoleUsecase(roleRepo)
 	roleHander := V1.NewRoleHander(httpServer, logger, baseHandler, roleUsecase)

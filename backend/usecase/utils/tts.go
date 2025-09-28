@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -58,15 +61,70 @@ type PCMChunk struct {
 	Samples []int16 // 解码后的 PCM 采样数据
 }
 
-// TtsStream 流式输入 text，流式输出 PCM
+// --- 核心：合句逻辑 ---
+// 收到 LLM 的 token 流，先合成句子再发给 TTS
+func MergeSentences(ctx context.Context, tokens <-chan string) <-chan string {
+	out := make(chan string, 8)
+
+	go func() {
+		defer close(out)
+
+		var buf strings.Builder
+		timer := time.NewTimer(2 * time.Second) // 超时强制触发
+		defer timer.Stop()
+
+		flush := func() {
+			s := strings.TrimSpace(buf.String())
+			if s != "" {
+				out <- s
+			}
+			buf.Reset()
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				flush()
+				return
+			case tk, ok := <-tokens:
+				if !ok {
+					flush()
+					return
+				}
+				buf.WriteString(tk)
+
+				// 如果遇到标点或句子结束符 -> 立刻 flush
+				if strings.ContainsAny(tk, "。！？!?") {
+					flush()
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(2 * time.Second)
+				} else {
+					// reset timer
+					if !timer.Stop() {
+						<-timer.C
+					}
+					timer.Reset(2 * time.Second)
+				}
+			case <-timer.C:
+				flush()
+				timer.Reset(2 * time.Second)
+			}
+		}
+	}()
+
+	return out
+}
+
+// --- TTS 调用 ---
 func (t *TtsStream) TtsStream(
 	ctx context.Context,
-	textChunks <-chan string, // 输入文本块
+	textChunks <-chan string, // 输入句子块
 	voiceType string,
 ) (<-chan PCMChunk, <-chan error) {
 
-	// 返回的两个 channel
-	out := make(chan PCMChunk, 8)
+	out := make(chan PCMChunk, 16)
 	errCh := make(chan error, 1)
 
 	u := url.URL{Scheme: "wss", Host: "openai.qiniu.com", Path: "/v1/voice/tts"}
@@ -90,7 +148,7 @@ func (t *TtsStream) TtsStream(
 			params := &ttsRequest{
 				Audio: audioParam{
 					VoiceType:  voiceType,
-					Encoding:   "pcm", // ⚠️ 注意这里设置 pcm 输出
+					Encoding:   "pcm",
 					SpeedRatio: 1.0,
 				},
 				Request: requestParam{
@@ -105,16 +163,19 @@ func (t *TtsStream) TtsStream(
 		}
 	}()
 
-	// 读取协程
+	// 读取协程（并发 PCM 解码 + 顺序输出）
 	go func() {
 		defer close(out)
 		defer close(errCh)
 		defer c.Close()
 
+		var mu sync.Mutex
+		seqBuf := make(map[int][]int16)
+		expectSeq := 0
+
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				// websocket 关闭时正常结束
 				return
 			}
 
@@ -131,21 +192,28 @@ func (t *TtsStream) TtsStream(
 					continue
 				}
 
-				// 转换成 []int16
-				samples := make([]int16, len(raw)/2)
-				_ = binary.Read(
-					bytes.NewReader(raw),
-					binary.LittleEndian,
-					&samples,
-				)
+				// 并发解码
+				go func(seq int, raw []byte) {
+					samples := make([]int16, len(raw)/2)
+					_ = binary.Read(bytes.NewReader(raw), binary.LittleEndian, &samples)
 
-				out <- PCMChunk{
-					Seq:     resp.Sequence,
-					Samples: samples,
-				}
+					mu.Lock()
+					seqBuf[seq] = samples
+
+					// 顺序发送
+					for {
+						if pcm, ok := seqBuf[expectSeq]; ok {
+							out <- PCMChunk{Seq: expectSeq, Samples: pcm}
+							delete(seqBuf, expectSeq)
+							expectSeq++
+						} else {
+							break
+						}
+					}
+					mu.Unlock()
+				}(resp.Sequence, raw)
 			}
 
-			// Sequence < 0 表示流结束
 			if resp.Sequence < 0 {
 				return
 			}

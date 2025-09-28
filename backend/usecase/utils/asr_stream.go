@@ -249,111 +249,148 @@ func (a *AsrUsecase) AsrStream(ctx context.Context, pcmStream <-chan []byte, onR
 		return fmt.Errorf("send config fail: %w", err)
 	}
 
-	partialCh := make(chan string, 8)
-	errCh := make(chan error, 1)
-	forceFinalCh := make(chan struct{}, 1)
+	// 统一的消息结构（partial 或 final）
+	type asrMsg struct {
+		Text    string
+		IsFinal bool
+	}
 
-	// debounce goroutine：处理 partial → final + 静音触发 final
+	resultCh := make(chan asrMsg, 16)
+	errCh := make(chan error, 1)
+
+	// debounce goroutine：统一处理 partial -> final（并维护 lastPartial/lastFinal）
 	go func() {
 		var pending string
-		var lastFinal string
 		var lastPartial string
-		timer := time.NewTimer(0)
-		<-timer.C // 清掉初始触发
+		var lastFinal string
+
+		var timer *time.Timer
+		var timerCh <-chan time.Time
+		timeout := 200 * time.Millisecond // 可调：停顿多久触发 final
+
+		resetTimer := func() {
+			if timer == nil {
+				timer = time.NewTimer(timeout)
+				timerCh = timer.C
+				return
+			}
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(timeout)
+			// timerCh 已经指向 timer.C
+		}
+
+		flushAsFinal := func(s string) {
+			if s != lastFinal {
+				onResult(s, true)
+				lastFinal = s
+			}
+			pending = ""
+			lastPartial = ""
+		}
+
+		defer func() {
+			// goroutine 退出前 flush 一次
+			if pending != "" && pending != lastFinal {
+				flushAsFinal(pending)
+			}
+		}()
 
 		for {
 			select {
-			case p, ok := <-partialCh:
+			case rm, ok := <-resultCh:
 				if !ok {
-					if pending != "" && pending != lastFinal {
-						onResult(pending, true)
-					}
 					return
 				}
-				pending = p
+				if rm.IsFinal {
+					flushAsFinal(rm.Text)
+					// stop timer
+					if timer != nil {
+						if !timer.Stop() {
+							select {
+							case <-timer.C:
+							default:
+							}
+						}
+					}
+					continue
+				}
+
+				// partial
+				pending = rm.Text
 				if pending != lastPartial {
 					onResult(pending, false)
 					lastPartial = pending
+					resetTimer()
 				}
-				// 重置静音触发 final
-				timer.Reset(500 * time.Millisecond)
+				// 只在 partial 到来时重置定时器
 
-			case <-timer.C:
-				if pending != "" && pending != lastFinal {
-					onResult(pending, true)
-					lastFinal = pending
-					pending = ""
-					lastPartial = ""
+			case <-timerCh:
+				// 静音超时，将 pending 当 final 发出
+				if pending != "" {
+					flushAsFinal(pending)
 				}
-				timer.Reset(500 * time.Millisecond)
-
-			case <-forceFinalCh:
-				if pending != "" && pending != lastFinal {
-					onResult(pending, true)
-					lastFinal = pending
-					pending = ""
-					lastPartial = ""
+				// 停掉 timer，等待下一次 partial 再创建
+				if timer != nil {
+					timer.Stop()
+					timer = nil
+					timerCh = nil
 				}
 
 			case <-ctx.Done():
+				if pending != "" && pending != lastFinal {
+					flushAsFinal(pending)
+				}
 				return
 			}
 		}
 	}()
 
-	// 读取服务端返回
+	// 读取服务端返回 -> 全部送到 resultCh，由上面的 debounce goroutine 统一处理
 	go func() {
+		defer close(resultCh)
 		for {
 			_, msg, err := ws.ReadMessage()
 			if err != nil {
-				errCh <- err
+				select {
+				case errCh <- err:
+				default:
+				}
 				return
 			}
 			text, isFinal := a.parseTextFromResponse(msg)
 			if text == "" {
 				continue
 			}
-			if isFinal {
-				onResult(text, true)
-				select {
-				case partialCh <- "":
-				default:
-				}
-			} else {
-				select {
-				case partialCh <- text:
-				case <-ctx.Done():
-					return
-				}
+			select {
+			case resultCh <- asrMsg{Text: text, IsFinal: isFinal}:
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
 
-	// 主发送循环
+	// 主发送循环：把 pcmStream 发送到远端 ASR
 	for {
 		select {
 		case <-ctx.Done():
 			_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			close(partialCh)
 			return ctx.Err()
 		case err := <-errCh:
-			close(partialCh)
 			return fmt.Errorf("ws read loop error: %w", err)
 		case chunk, ok := <-pcmStream:
 			if !ok {
 				_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-				close(partialCh)
 				return nil
 			}
 			if err := a.sendAudioChunk(ws, &seq, chunk); err != nil {
-				close(partialCh)
 				return fmt.Errorf("send audio chunk fail: %w", err)
 			}
-			// ⚡ 每次发送音频都尝试重置静音 final
-			select {
-			case forceFinalCh <- struct{}{}:
-			default:
-			}
+			// ⚠️ 这里不再 reset 定时器，只依赖 partial 来 reset
 		}
 	}
 }

@@ -136,6 +136,6 @@ func (u *UserHander) UpgradeToWS(c echo.Context) error {
 	//	return errors.New("Invalid user id or role id")
 	//}
 	// 这里替换成你的「上下文聊天」逻辑即可
-	u.wsusecase.HanderWs(ws, "1", 1)
+	u.wsusecase.HanderWs2(ws, "1", 1)
 	return nil
 }
